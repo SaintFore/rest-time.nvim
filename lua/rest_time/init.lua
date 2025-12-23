@@ -6,6 +6,7 @@ local options = {
 local timer_running = false
 
 local win_id = nil
+local check_time
 
 local function close_window()
 	if win_id and vim.api.nvim_win_is_valid(win_id) then
@@ -34,6 +35,7 @@ local function open_window()
 		"║  该放松一下眼睛和身体  ║",
 		"╚════════════════════════╝",
 		"在normal模式下按q退出",
+		"再工作五分钟请按下s",
 	}
 	-- 第一个参数buf是缓冲区ID，第二个参数是起始行，第三个参数是结束行，第四个参数表示是否严格按字节数插入，第五个参数是要插入的文本行的表
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, text)
@@ -58,16 +60,20 @@ local function open_window()
 
 	vim.keymap.set("n", "q", function()
 		close_window()
+		vim.defer_fn(check_time, options.delay * 60 * 1000)
 	end, { buffer = buf, nowait = true, silent = true }) -- nowait表示不等待其他按键，silent表示不显示命令行信息
+	vim.keymap.set("n", "s", function()
+		close_window()
+		vim.defer_fn(check_time, 5 * 60 * 1000)
+	end, { buffer = buf, nowait = true, silent = true })
 end
 
-local function check_time()
+function check_time()
 	if not timer_running then
 		return
 	end
 	-- vim.notify(options.message, vim.log.levels.WARN)
 	open_window()
-	vim.defer_fn(check_time, options.delay * 60 * 1000)
 end
 
 local M = {}
