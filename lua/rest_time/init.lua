@@ -1,6 +1,7 @@
 local options = {
 	delay = 25,
 	message = "该休息了",
+	snooze = 5,
 }
 
 local timer_running = false
@@ -9,10 +10,14 @@ local win_id = nil
 local check_time
 local target_time
 
+local timer = vim.loop.new_timer()
+
 local function start_timer(minutes)
 	-- os.time()返回当前时间的时间戳，单位为秒,从1970年1月1日00:00:00到现在的秒数
+	timer:stop()
 	target_time = os.time() + minutes * 60
-	vim.defer_fn(check_time, minutes * 1000 * 60)
+	-- vim.defer_fn(check_time, minutes * 1000 * 60)
+	timer:start(minutes * 60 * 1000, 0, vim.schedule_wrap(check_time))
 end
 
 local function close_window()
@@ -67,11 +72,11 @@ local function open_window()
 
 	vim.keymap.set("n", "q", function()
 		close_window()
-		start_timer(25)
+		start_timer(options.delay)
 	end, { buffer = buf, nowait = true, silent = true }) -- nowait表示不等待其他按键，silent表示不显示命令行信息
 	vim.keymap.set("n", "s", function()
 		close_window()
-		start_timer(5)
+		start_timer(options.snooze)
 	end, { buffer = buf, nowait = true, silent = true })
 end
 
@@ -104,7 +109,7 @@ function M.start()
 	if type(options.delay) ~= "number" then
 		vim.notify("间隔时间必须是数字", vim.log.levels.ERROR)
 	else
-		start_timer(25)
+		start_timer(options.delay)
 	end
 end
 
