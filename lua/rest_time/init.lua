@@ -39,6 +39,9 @@ local function open_window()
 		return
 	end
 
+	-- Default to regular delay if closed unexpectedly
+	local next_duration = options.delay
+
 	-- false表示非列表缓冲区，true表示不可修改缓冲区
 	local buf = vim.api.nvim_create_buf(false, true)
 	local text = {
@@ -70,13 +73,32 @@ local function open_window()
 	win_id = vim.api.nvim_open_win(buf, true, win_opts)
 	vim.api.nvim_set_option_value("winhighlight", "Normal:RealTimeAlert,FloatBorder:RealTimeAlert", { win = win_id })
 
+	vim.api.nvim_create_autocmd("WinClosed", {
+		pattern = tostring(win_id),
+		callback = function()
+			win_id = nil
+			-- Cleanup buffer if it still exists (e.g. if closed via :q)
+			if vim.api.nvim_buf_is_valid(buf) then
+				vim.schedule(function()
+					pcall(vim.api.nvim_buf_delete, buf, { force = true })
+				end)
+			end
+
+			-- Only restart timer if Rest time is still enabled
+			if timer_running then
+				start_timer(next_duration)
+			end
+		end,
+		once = true,
+	})
+
 	vim.keymap.set("n", "q", function()
+		next_duration = options.delay
 		close_window()
-		start_timer(options.delay)
 	end, { buffer = buf, nowait = true, silent = true }) -- nowait表示不等待其他按键，silent表示不显示命令行信息
 	vim.keymap.set("n", "s", function()
+		next_duration = options.snooze
 		close_window()
-		start_timer(options.snooze)
 	end, { buffer = buf, nowait = true, silent = true })
 end
 
@@ -123,12 +145,22 @@ function M.status()
 		vim.notify("Rest time未启动", vim.log.levels.INFO)
 	else
 		local remaining = target_time - os.time()
-		local minutes = math.floor(remaining / 60)
-		local seconds = remaining % 60
-		vim.notify(
-			string.format("Rest time已启动，距离下次休息还有 %d 分 %d 秒", minutes, seconds),
-			vim.log.levels.INFO
-		)
+		if remaining >= 0 then
+			local minutes = math.floor(remaining / 60)
+			local seconds = remaining % 60
+			vim.notify(
+				string.format("Rest time已启动，距离下次休息还有 %d 分 %d 秒", minutes, seconds),
+				vim.log.levels.INFO
+			)
+		else
+			local overdue = math.abs(remaining)
+			local minutes = math.floor(overdue / 60)
+			local seconds = overdue % 60
+			vim.notify(
+				string.format("Rest time已启动，休息时间已过 %d 分 %d 秒！请尽快休息。", minutes, seconds),
+				vim.log.levels.WARN
+			)
+		end
 	end
 end
 
